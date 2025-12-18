@@ -1,0 +1,17 @@
+
+---
+
+## Prerequisites
+
+- Python **3.12+**
+- Docker Desktop
+- (Optional) VS Code
+
+---
+
+## Start Redis (required)
+
+Redis is used for buffering streamed events and enabling resume.
+
+```bash
+docker compose up -d
