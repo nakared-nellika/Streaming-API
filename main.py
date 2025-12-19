@@ -9,7 +9,11 @@ import os
 import sys
 from pathlib import Path
 
-VB_BACKEND_DIR = Path(os.environ.get("VB_BACKEND_DIR", r"D:\VB-BACKEND\VB-BACKEND")).resolve()
+# Get the current directory (where main.py is located)
+CURRENT_DIR = Path(__file__).parent.resolve()
+
+# Set VB_BACKEND_DIR to current directory or environment variable if provided
+VB_BACKEND_DIR = Path(os.environ.get("VB_BACKEND_DIR", str(CURRENT_DIR))).resolve()
 
 # ทำให้ relative path ใน VB-BACKEND (เช่น prompts/...) ทำงานได้
 os.chdir(VB_BACKEND_DIR)
@@ -55,6 +59,7 @@ async def chat_stream(ws: WebSocket):
             data = await ws.receive_text()
             try:
                 envelope = json.loads(data)
+                print("⬅", envelope)
             except Exception:
                 await ws.send_json({"type": "error", "payload": {"message": "invalid json"}})
                 continue

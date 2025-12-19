@@ -262,6 +262,10 @@ class Orchestrator:
 
                     et = chunk.get("type")
                     pl = chunk.get("payload", chunk)
+                    # LangGraph streaming adapter: treat {"stream": "..."} as token
+                    if not et and "stream" in chunk:
+                        await self._emit(websocket, conv, "token", {"text": chunk["stream"]})
+                        continue
                     if et in ("status", "card", "token", "done", "error"):
                         await self._emit(websocket, conv, et, pl)
                     else:
