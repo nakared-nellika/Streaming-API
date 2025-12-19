@@ -3,7 +3,9 @@ import json
 import time
 import websockets
 
-WS_URI = "ws://127.0.0.1:8000/chat/stream"
+from websockets.exceptions import ConnectionClosed
+
+WS_URI = "ws://127.0.0.1:9000/chat/stream"
 CONVERSATION_ID = "demo-1"
 
 USER_TEXT = "Hello, I see unusual charges on my card"
@@ -48,7 +50,7 @@ async def test():
                 data = json.loads(msg)
             except json.JSONDecodeError:
                 continue
-
+            
             # 3) ถ้า server รอ action → ส่ง action กลับ (ครั้งเดียว)
             if (
                 not action_sent

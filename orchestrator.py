@@ -1,13 +1,9 @@
 """Orchestrator layer: manages conversation state machine and drives event emission.
 
-This module contains the `Orchestrator` class which receives client events and
-emits server events following the required state machine.
-
 Integration uses VBChatbot (LangGraph) which yields streamed chunks and interrupt tuples.
 We buffer small chunks into larger text tokens for UI friendliness.
 """
 
-# orchestrator.py (บนสุด)
 import sys
 sys.path.append("D:/VB-BACKEND/VB-BACKEND")
 
@@ -40,9 +36,11 @@ class Conversation:
         self.sequence = 0
         self.sent_event_ids: set[str] = set()
         self.current_task: Optional[asyncio.Task] = None
-
-        # Keep chatbot per conversation to preserve runtime context if needed
         self.vb: Optional[VBChatbot] = None
+
+        # --- added: identity/context ---
+        self.user_id: Optional[str] = None
+        self.user_info: Dict[str, Any] = {}
 
 
 class Orchestrator:
@@ -57,14 +55,43 @@ class Orchestrator:
             self._locks[conversation_id] = asyncio.Lock()
         return self.conversations[conversation_id]
 
+    # --- added: extract user_id/user_info from envelope ---
+    def _extract_user_ctx(self, envelope: Dict[str, Any]) -> Dict[str, Any]:
+        payload = envelope.get("payload", {}) or {}
+        user_info = payload.get("user_info") or envelope.get("user_info") or {}
+        if not isinstance(user_info, dict):
+            user_info = {}
+
+        user_id = (
+            envelope.get("user_id")
+            or payload.get("user_id")
+            or user_info.get("user_id")
+        )
+        if user_id is not None:
+            user_id = str(user_id)
+
+        # keep user_id inside user_info too
+        if user_id and "user_id" not in user_info:
+            user_info = dict(user_info)
+            user_info["user_id"] = user_id
+
+        return {"user_id": user_id, "user_info": user_info}
+
     async def handle_incoming(self, websocket, envelope: Dict[str, Any]):
         t = envelope.get("type")
         conv_id = envelope.get("conversation_id")
         if not t or not conv_id:
-            await websocket.send_json({"type": "error", "payload": {"message": "missing type or conversation_id"}})
+            await self._safe_send_json(websocket, {"type": "error", "payload": {"message": "missing type or conversation_id"}})
             return
 
         conv = self._ensure_conv(conv_id)
+
+        # --- added: update conv user context when provided ---
+        ctx = self._extract_user_ctx(envelope)
+        if ctx.get("user_id"):
+            conv.user_id = ctx["user_id"]
+        if ctx.get("user_info"):
+            conv.user_info = ctx["user_info"]
 
         if t == "resume":
             await self._handle_resume(websocket, conv, envelope)
@@ -93,7 +120,9 @@ class Orchestrator:
             eid = ev.get("event_id")
             if eid and eid in conv.sent_event_ids:
                 continue
-            await websocket.send_json(ev)
+            ok = await self._safe_send_json(websocket, ev)
+            if not ok:
+                return
             if eid:
                 conv.sent_event_ids.add(eid)
 
@@ -104,12 +133,13 @@ class Orchestrator:
         conv.state = State.Analyzing
         await self._emit(websocket, conv, "status", {"status": "analyzing"})
 
-        # cancel previous task
+        # cancel previous task (กรณีผู้ใช้พิมพ์ใหม่ระหว่างกำลัง generate)
         if conv.current_task and not conv.current_task.done():
             conv.current_task.cancel()
 
         # create chatbot instance for this conversation (kept for resume)
-        conv.vb = VBChatbot()
+        if conv.vb is None:
+            conv.vb = VBChatbot()
 
         conv.state = State.Generating
         conv.current_task = asyncio.create_task(
@@ -118,7 +148,7 @@ class Orchestrator:
                 conv=conv,
                 message=text,
                 resume=False,
-                action_id=None,
+                user_info=conv.user_info,   # --- changed: pass user_info from conv ---
             )
         )
 
@@ -134,11 +164,12 @@ class Orchestrator:
         conv.state = State.ProcessingAction
         await self._emit(websocket, conv, "status", {"status": "processing_action"})
 
-        # cancel any running task
-        if conv.current_task and not conv.current_task.done():
-            conv.current_task.cancel()
+        # *** ไม่ต้อง cancel task เดิม ***
+        # เพราะตอน interrupt เรา return ออกจาก _run_vb_stream แล้ว task เดิมจบไปแล้ว
 
-        # resume with action_id
+        if conv.vb is None:
+            conv.vb = VBChatbot()
+
         conv.state = State.Generating
         conv.current_task = asyncio.create_task(
             self._run_vb_stream(
@@ -146,7 +177,7 @@ class Orchestrator:
                 conv=conv,
                 message=action_id,
                 resume=True,
-                action_id=action_id,
+                user_info=conv.user_info,   # --- changed: pass user_info from conv ---
             )
         )
 
@@ -157,85 +188,74 @@ class Orchestrator:
         conv.state = State.Completed
         await self._emit(websocket, conv, "done", {"message": "stopped"})
 
-    # VBChatbot integration
+    # -------- VBChatbot integration --------
 
     def _should_flush(self, buf: str) -> bool:
-        """Flush policy for buffered text -> token event."""
         if not buf:
             return False
-        # flush on newline (paragraph boundaries)
         if "\n" in buf:
             return True
-        # flush when buffer is large enough
         if len(buf) >= 80:
             return True
-        # flush at sentence-ish boundaries if already has some length
         if buf.endswith((" ", ".", "!", "?", "…", "ฯ", "。")) and len(buf) >= 25:
             return True
         return False
 
     def _normalize_chunk(self, s: str) -> str:
-        """Normalize weird chunking like single chars with lots of spaces/newlines."""
         if not s:
             return s
-        # preserve newlines, but collapse excessive spaces
-        # do not strip fully; we want spacing to look natural
         return s.replace("\r\n", "\n").replace("\r", "\n")
 
-    async def _run_vb_stream(
-        self,
-        websocket,
-        conv: Conversation,
-        message: str,
-        resume: bool,
-        action_id: Optional[str],
-    ):
+    # --- changed: accept user_info param ---
+    async def _run_vb_stream(self, websocket, conv: Conversation, message: str, resume: bool = False, user_info: Optional[Dict[str, Any]] = None):
         buffer_text = ""
-
         try:
             vb = conv.vb or VBChatbot()
             conv.vb = vb
 
-            # In your VBChatbot, it expects: (thread_id, message, resume, user_info)
+            # fallback user_id if none provided (keeps old demo behavior but not hardcoded only)
+            ui = user_info or {}
+            if not isinstance(ui, dict):
+                ui = {}
+            if conv.user_id and "user_id" not in ui:
+                ui = dict(ui)
+                ui["user_id"] = conv.user_id
+            if "user_id" not in ui:
+                ui = dict(ui)
+                ui["user_id"] = "demo-user"
+
             async for chunk in vb.run(
                 thread_id=conv.id,
                 message=message,
                 resume=resume,
-                user_info={},
+                user_info=ui,  # --- changed: use ui from client/conv ---
             ):
-                # stop if state changed away from Generating (e.g., stop)
                 if conv.state != State.Generating:
                     break
 
-                # INTERRUPT: ('Interrupt:', 'question...')
+                # INTERRUPT
                 if isinstance(chunk, tuple) and len(chunk) >= 2 and chunk[0] == "Interrupt:":
                     question = str(chunk[1])
 
-                    # flush remaining buffer first
                     if buffer_text.strip():
                         await self._emit(websocket, conv, "token", {"text": buffer_text})
                         buffer_text = ""
 
-                    conv.state = State.CardReady
                     await self._emit(websocket, conv, "card", self._build_confirm_card(question))
-
                     conv.state = State.WaitingAction
                     await self._emit(websocket, conv, "status", {"status": "waiting_action"})
                     return
 
-                # TEXT CHUNK
+                # TEXT
                 if isinstance(chunk, str) and chunk:
-                    chunk = self._normalize_chunk(chunk)
-                    buffer_text += chunk
-
+                    buffer_text += self._normalize_chunk(chunk)
                     if self._should_flush(buffer_text):
                         await self._emit(websocket, conv, "token", {"text": buffer_text})
                         buffer_text = ""
                     continue
 
-                # DICT/OTHER (future proof)
+                # DICT
                 if isinstance(chunk, dict):
-                    # flush buffer before sending structured event
                     if buffer_text.strip():
                         await self._emit(websocket, conv, "token", {"text": buffer_text})
                         buffer_text = ""
@@ -248,13 +268,10 @@ class Orchestrator:
                         await self._emit(websocket, conv, "status", {"status": "update", "data": chunk})
                     continue
 
-            # stream ended normally -> flush tail
             if buffer_text.strip():
                 await self._emit(websocket, conv, "token", {"text": buffer_text})
-                buffer_text = ""
 
             conv.state = State.Completed
-            # Different done message for resume vs first message (optional)
             await self._emit(websocket, conv, "done", {"message": "completed" if not resume else "action_processed"})
 
         except asyncio.CancelledError:
@@ -264,42 +281,44 @@ class Orchestrator:
             conv.state = State.Error
             await self._emit(websocket, conv, "error", {"message": str(e)})
 
-    # Event emission
+    # -------- Safe emit / buffer --------
+
+    async def _safe_send_json(self, websocket, payload: Dict[str, Any]) -> bool:
+        """Send json but never crash the whole websocket handler."""
+        try:
+            await websocket.send_json(payload)
+            return True
+        except Exception:
+            # ถ้า client หลุดไปแล้ว จะส่งไม่ได้ -> อย่าให้ล้ม
+            return False
 
     async def _emit(self, websocket, conv: Conversation, event_type: str, payload: Dict[str, Any]):
         async with self._locks[conv.id]:
             conv.sequence += 1
             seq = conv.sequence
             ev = make_event(event_type, conv.id, seq, payload)
-            await websocket.send_json(ev)
+
+            # --- added: attach user_id at event top-level so client sees it ---
+            if conv.user_id:
+                ev["user_id"] = conv.user_id
+
+            ok = await self._safe_send_json(websocket, ev)
+            if not ok:
+                return
+
             self.buffer.append(conv.id, seq, ev)
 
             ev_id = ev.get("event_id")
             if ev_id:
                 conv.sent_event_ids.add(ev_id)
 
-    # UI Card builders
+    # -------- Card --------
 
     def _build_confirm_card(self, question: str) -> Dict[str, Any]:
         return {
             "title": "Confirm Action",
             "badge": None,
-            "sections": [
-                {"kind": "note", "data": {"text": question}},
-            ],
-            "actions": [
-                {"id": "confirm", "label": "Confirm", "style": "primary"},
-                {"id": "cancel", "label": "Cancel", "style": "secondary"},
-            ],
-        }
-
-    def _build_sample_card(self, prompt: str) -> Dict[str, Any]:
-        return {
-            "title": "Sample Card",
-            "badge": None,
-            "sections": [
-                {"kind": "note", "data": {"text": f"Summary for: {prompt[:80]}"}},
-            ],
+            "sections": [{"kind": "note", "data": {"text": question}}],
             "actions": [
                 {"id": "confirm", "label": "Confirm", "style": "primary"},
                 {"id": "cancel", "label": "Cancel", "style": "secondary"},

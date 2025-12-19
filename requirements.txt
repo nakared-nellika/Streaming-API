@@ -1,3 +1,11 @@
 fastapi==0.95.2
 uvicorn[standard]==0.22.0
 pydantic==1.10.12
+httpx
+
+langchain
+langchain-core
+langgraph
+langchain-openai
+python-dotenv
+typing-extensions
