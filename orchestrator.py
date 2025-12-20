@@ -244,6 +244,7 @@ class Orchestrator:
                 # INTERRUPT
                 if isinstance(chunk, tuple) and len(chunk) >= 2 and chunk[0] == "Interrupt:":
                     question = str(chunk[1])
+                    print(f"Orchestrator: interrupt detected, asking for confirmation: {chunk}")
 
                     if buffer_text.strip():
                         await self._emit(websocket, conv, "token", {"text": buffer_text})
@@ -264,6 +265,7 @@ class Orchestrator:
 
                 # DICT
                 if isinstance(chunk, dict):
+                    print(chunk.get("case_progress"))
                     if buffer_text.strip():
                         await self._emit(websocket, conv, "token", {"text": buffer_text})
                         buffer_text = ""
@@ -271,24 +273,28 @@ class Orchestrator:
                     et = chunk.get("type")
                     pl = chunk.get("payload", chunk)
                     # LangGraph streaming adapter: treat {"stream": "..."} as token
+                    if chunk.get("case_progress"):
+                        await self._emit(websocket, conv, "caseProgress", self._build_case_progress())
+                        print(f"Orchestrator: case progress update: {chunk}")
+                        continue
                     if not et and "stream" in chunk:
                         await self._emit(websocket, conv, "token", {"text": chunk["stream"]})
-                        continue
-                    # Ensure card-locked status surfaces only after confirm action (resume=True)
-                    if et == "status" and isinstance(pl, dict) and pl.get("status") == "Card temporarily locked" and not resume:
-                        # Skip early emission to keep ordering below the action card
                         continue
                     if et in ("status", "card", "token", "done", "error"):
                         await self._emit(websocket, conv, et, pl)
                     else:
                         await self._emit(websocket, conv, "status", {"status": "update", "data": chunk})
                     continue
-
+                # Confrim
+                # print(chunk.get("case_progress"))
+        
             if buffer_text.strip():
                 await self._emit(websocket, conv, "token", {"text": buffer_text})
 
             conv.state = State.Completed
-            print(f"Conversation {resume} completed.")
+            # print(f"Conversation {resume} completed.")
+            
+            
             await self._emit(websocket, conv, "done", {"message": "completed" if not resume else "action_processed"})
 
         except asyncio.CancelledError:
@@ -341,3 +347,52 @@ class Orchestrator:
                 {"id": "cancel", "label": "Cancel", "style": "secondary"},
             ],
         }
+    def _build_progress_card(self, question: str) -> Dict[str, Any]:
+        return {
+            # "title": "Case Progress",
+  
+        }
+        
+    def _build_case_progress(self,) -> Dict[str, Any]:
+        return {
+            "title": "Case Progress",
+            "steps": [
+                {
+                "id": "reported",
+                "status": "Reported",
+                "time": "Today at 10:00 AM",
+                "description": "Suspicious activity detected and case opened",
+                "state": "done",
+                },
+                {
+                "id": "investigating",
+                "status": "Investigating",
+                "time": "In progress",
+                "description": "Our fraud team is reviewing the transactions",
+                "state": "active",
+                },
+                {
+                "id": "resolved",
+                "status": "Resolved",
+                "time": "Estimated 3–5 business days",
+                "description": "You'll receive a full update and refund if applicable",
+                "state": "pending",
+                },
+            ]
+           
+        }
+    
+    def _build_suspicious_activity_detected(self,) -> Dict[str, Any]:
+        return {
+            # type: "incidentSummary",
+            "title": "Suspicious Activity Detected",
+            "badge": "Under Review",
+            "caseId": "SA-2847",
+            "issueType": "Unauthorized Transactions",
+            "transactions": [
+                { "merchant": "Online Store XYZ", "amount": "$287.50" },
+                { "merchant": "Tech Gadgets Inc", "amount": "$412.99" },
+            ],
+            "nextSteps": "Recommend temporary card lock & dispute filing",
+        }
+

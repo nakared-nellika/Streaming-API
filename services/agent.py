@@ -120,6 +120,7 @@ class VBChatbot:
             config = {"configurable": {"thread_id": thread_id}}
 
             async for result in graph.astream(input, config=config, stream_mode=['updates', 'messages', 'custom']):
+                print(f"VBChatbot result: {result}")
                 if result[0] == 'updates':
                     if "__interrupt__" in result[1]:
                         yield "Interrupt:", result[1]["__interrupt__"][0].value['question']
