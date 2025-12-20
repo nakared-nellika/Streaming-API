@@ -23,12 +23,22 @@ if str(VB_BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(VB_BACKEND_DIR))
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 
 from buffer import EventBuffer
 from orchestrator import Orchestrator
 
 app = FastAPI()
+
+# Add CORS middleware for frontend communication
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # In production, specify your frontend URL
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 buffer = EventBuffer()
 orch = Orchestrator(buffer)
@@ -56,16 +66,44 @@ async def chat_stream(ws: WebSocket):
     await ws.accept()
     try:
         while True:
-            data = await ws.receive_text()
             try:
-                envelope = json.loads(data)
-                print("⬅", envelope)
-            except Exception:
-                await ws.send_json({"type": "error", "payload": {"message": "invalid json"}})
-                continue
+                data = await ws.receive_text()
+                try:
+                    envelope = json.loads(data)
+                    print("⬅", envelope)
+                except json.JSONDecodeError as e:
+                    await ws.send_json({
+                        "type": "error", 
+                        "payload": {
+                            "message": f"invalid json: {str(e)}"
+                        }
+                    })
+                    continue
 
-            # Delegate to orchestrator
-            await orch.handle_incoming(ws, envelope)
+                # Delegate to orchestrator
+                await orch.handle_incoming(ws, envelope)
+
+            except Exception as e:
+                print(f"Error processing message: {e}")
+                await ws.send_json({
+                    "type": "error", 
+                    "payload": {
+                        "message": f"server error: {str(e)}"
+                    }
+                })
 
     except WebSocketDisconnect:
+        print("Client disconnected")
+        return
+    except Exception as e:
+        print(f"WebSocket error: {e}")
+        try:
+            await ws.send_json({
+                "type": "error", 
+                "payload": {
+                    "message": f"connection error: {str(e)}"
+                }
+            })
+        except:
+            pass  # Connection might be closed already
         return

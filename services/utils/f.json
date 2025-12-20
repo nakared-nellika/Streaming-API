@@ -1,0 +1,22 @@
+{'messages': [HumanMessage(content='พบการโอนเงินผิดปกติ', additional_kwargs={}, response_metadata={}, id='ca668036-611d-4db2-b09e-20d993314278'), AIMessage(content='### Acknowledgment\nท่านได้ร้องขอให้เราทำการวิเคราะห์และหากิจกรรมที่ไม่ปกติในธุรกรรมธนาคารของท่าน\n\n### Findings\nจากการวิเคราะห์ของเรา พบธุรกรรมที่อาจถือว่าเป็นกิจกรรมที่ไม่ปกติดังนี้:\n- มีการใช้จ่ายจำนวนเงิน 9,
+        800 บาท กับร้านค้าออนไลน์ที่ไม่รู้จัก (Unknown Online Store) ซึ่งถูกตั้งสถานะว่าไม่ได้รับการอนุมัติและติดธงเป็นการฉ้อโกง\n- มีการใช้จ่ายจำนวนเงิน 15,
+        500 บาท กับเว็บไซต์อีคอมเมิร์ซต่างประเทศ (Foreign E-commerce Site) ซึ่งถูกตั้งสถานะว่าไม่ได้รับการอนุมัติและติดธงเป็นการฉ้อโกง\n\n### Summary and Recommendations\n**สรุป:** ธุรกรรมที่มีการใช้จ่ายที่อาจไม่ถูกต้องรวมถึง 25,
+        300 บาท ซึ่งส่วนใหญ่เกี่ยวข้องกับร้านค้าออนไลน์ที่ไม่ได้รับการอนุมัติ\n\n**คำแนะนำ:** \n- พิจารณาตรวจสอบรายการธุรกรรมเหล่านี้ในรายละเอียดเพิ่มเติมโดยเฉพาะจากรายการที่ถูกตั้งกรณีการฉ้อโกง\n- ติดต่อฝ่ายดูแลลูกค้าหรือทีมที่เกี่ยวข้องของธนาคารเพื่อรายงานและหารือเกี่ยวกับรายการที่น่าสงสัย\n- พิจารณาเปลี่ยนแปลงวิธีการรักษาความปลอดภัยหรือการอนุมัติธุรกรรมสำหรับการใช้งานออนไลน์เพิ่มเติม', additional_kwargs={}, response_metadata={'finish_reason': 'stop', 'model_name': 'gpt-4o-2024-08-06', 'system_fingerprint': 'fp_4a331a0222', 'model_provider': 'openai'
+        }, id='lc_run--019b3ab7-c772-7661-a564-b5b7da3bfd3e', usage_metadata={'input_tokens': 910, 'output_tokens': 336, 'total_tokens': 1246, 'input_token_details': {'audio': 0, 'cache_read': 0
+            }, 'output_token_details': {'audio': 0, 'reasoning': 0
+            }
+        })
+    ], 'user_info': {'user_id': 'demo-user'
+    }, 'transactions': [
+        {'transaction_id': 'TXN2001', 'account_id': 'ACC9001', 'transaction_datetime': '2025-12-01T09: 12: 30+07: 00', 'transaction_type': 'DEBIT', 'amount': -150.0, 'currency': 'THB', 'merchant': '7-Eleven', 'channel': 'CARD', 'authorization_status': 'AUTHORIZED', 'auth_method': 'PIN', 'status': 'SUCCESS', 'fraud_flag': False
+        },
+        {'transaction_id': 'TXN2002', 'account_id': 'ACC9001', 'transaction_datetime': '2025-12-01T12: 45: 10+07: 00', 'transaction_type': 'DEBIT', 'amount': -2350.0, 'currency': 'THB', 'merchant': 'Central Department Store', 'channel': 'CARD', 'authorization_status': 'AUTHORIZED', 'auth_method': 'OTP', 'status': 'SUCCESS', 'fraud_flag': False
+        },
+        {'transaction_id': 'TXN2003', 'account_id': 'ACC9001', 'transaction_datetime': '2025-12-01T18: 00: 00+07: 00', 'transaction_type': 'CREDIT', 'amount': 28500.0, 'currency': 'THB', 'merchant': 'ABC Company Ltd.', 'channel': 'TRANSFER', 'authorization_status': 'AUTHORIZED', 'auth_method': 'BIOMETRIC', 'status': 'SUCCESS', 'fraud_flag': False
+        },
+        {'transaction_id': 'TXN2004', 'account_id': 'ACC9001', 'transaction_datetime': '2025-12-02T02: 14: 55+07: 00', 'transaction_type': 'DEBIT', 'amount': -9800.0, 'currency': 'THB', 'merchant': 'Unknown Online Store', 'channel': 'ONLINE', 'authorization_status': 'UNAUTHORIZED', 'auth_method': 'NONE', 'status': 'POSTED', 'fraud_flag': True
+        },
+        {'transaction_id': 'TXN2005', 'account_id': 'ACC9001', 'transaction_datetime': '2025-12-02T03: 01: 20+07: 00', 'transaction_type': 'DEBIT', 'amount': -15500.0, 'currency': 'THB', 'merchant': 'Foreign E-commerce Site', 'channel': 'ONLINE', 'authorization_status': 'UNAUTHORIZED', 'auth_method': 'NONE', 'status': 'POSTED', 'fraud_flag': True
+        }
+    ]
+}

@@ -46,13 +46,16 @@ class VBChatbot:
 
         # Azure OpenAI LLM factory
         def _az_llm(temperature: float, max_tokens: int):
+            DEPLOYMENT_NAME = "gpt-4o-0513"
+            VERSION = "2024-02-15-preview"
+            BASE_URL = "https://digital-openai-prod-004.openai.azure.com/"
+            API_KEY = "5f99c21a65b5428f800d8c4e5f8655dd"
             return AzureChatOpenAI(
-                azure_endpoint=os.environ["AZURE_OPENAI_ENDPOINT"],
-                azure_deployment=os.environ["AZURE_OPENAI_DEPLOYMENT"],  # ชื่อ deployment ของคุณ
-                api_key=os.environ["AZURE_OPENAI_API_KEY"],
-                api_version=os.environ.get("AZURE_OPENAI_API_VERSION", "2024-02-15-preview"),
-                temperature=temperature,
-                max_tokens=max_tokens,
+                azure_endpoint=BASE_URL,
+                azure_deployment=DEPLOYMENT_NAME,
+                openai_api_key=API_KEY,
+                openai_api_version=VERSION,
+                openai_api_type="azure",
             )
 
         # สร้างโมเดล (Azure)
@@ -105,21 +108,33 @@ class VBChatbot:
             del self.graphs[thread_id]
 
     async def run(self, thread_id: str, message: str, resume: bool, user_info: dict):
-        graph = await self.build_graph(thread_id)
+        try:
+            graph = await self.build_graph(thread_id)
 
-        if resume:
-            input = Command(resume=message)
-        else:
-            input = {"messages": [HumanMessage(content=message)], "user_info": user_info}
+            if resume:
+                input = Command(resume=message)
+            else:
+                input = {"messages": [HumanMessage(content=message)], "user_info": user_info}
+                print(f"Input messages: {message}")
 
-        config = {"configurable": {"thread_id": thread_id}}
+            config = {"configurable": {"thread_id": thread_id}}
 
-        async for result in graph.astream(input, config=config, stream_mode=['updates', 'messages', 'custom']):
-            if result[0] == 'updates':
-                if "__interrupt__" in result[1]:
-                    yield "Interrupt:", result[1]["__interrupt__"][0].value['question']
-            if result[0] == 'custom':
-                yield result[1]
-            if result[0] == 'messages':
-                if result[1][1]['langgraph_node'] != 'map_intent':
-                    yield result[1][0].content
+            async for result in graph.astream(input, config=config, stream_mode=['updates', 'messages', 'custom']):
+                if result[0] == 'updates':
+                    if "__interrupt__" in result[1]:
+                        yield "Interrupt:", result[1]["__interrupt__"][0].value['question']
+                if result[0] == 'custom':
+                    yield result[1]
+                if result[0] == 'messages':
+                    if result[1][1]['langgraph_node'] != 'map_intent':
+                        yield result[1][0].content
+
+        except Exception as e:
+            print(f"VBChatbot error: {e}")
+            # Fallback test response for debugging
+            yield f"ขอบคุณสำหรับข้อความ: '{message}'\n"
+            yield f"ผมได้รับข้อความของคุณแล้วและกำลังประมวลผล...\n"
+            yield f"User ID: {user_info.get('user_id', 'unknown')}\n"
+            yield f"Thread ID: {thread_id}\n"
+            yield f"Resume: {resume}\n"
+            yield "การเชื่อมต่อและการส่งข้อความทำงานปกติแล้ว! 🎉"

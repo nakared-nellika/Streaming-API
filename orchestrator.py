@@ -4,8 +4,14 @@ Integration uses VBChatbot (LangGraph) which yields streamed chunks and interrup
 We buffer small chunks into larger text tokens for UI friendliness.
 """
 
+import os
 import sys
-sys.path.append("D:/VB-BACKEND/VB-BACKEND")
+from pathlib import Path
+
+# Add the services directory to the path for importing
+current_dir = Path(__file__).parent
+services_dir = current_dir / 'services'
+sys.path.insert(0, str(services_dir))
 
 from services.agent import VBChatbot
 
@@ -58,6 +64,7 @@ class Orchestrator:
     # --- added: extract user_id/user_info from envelope ---
     def _extract_user_ctx(self, envelope: Dict[str, Any]) -> Dict[str, Any]:
         payload = envelope.get("payload", {}) or {}
+        print("extracting user context from envelope:", envelope)
         user_info = payload.get("user_info") or envelope.get("user_info") or {}
         if not isinstance(user_info, dict):
             user_info = {}
@@ -160,6 +167,7 @@ class Orchestrator:
         payload = envelope.get("payload", {})
         action_id = payload.get("id") or payload.get("action") or payload.get("action_id") or ""
         action_id = str(action_id)
+        print(f"Received action: {action_id}")
 
         conv.state = State.ProcessingAction
         await self._emit(websocket, conv, "status", {"status": "processing_action"})
@@ -195,7 +203,7 @@ class Orchestrator:
             return False
         if "\n" in buf:
             return True
-        if len(buf) >= 80:
+        if len(buf) >= 200:
             return True
         if buf.endswith((" ", ".", "!", "?", "…", "ฯ", "。")) and len(buf) >= 25:
             return True
@@ -204,7 +212,7 @@ class Orchestrator:
     def _normalize_chunk(self, s: str) -> str:
         if not s:
             return s
-        return s.replace("\r\n", "\n").replace("\r", "\n")
+        return s.replace("\r\n", "").replace("\r", "")
 
     # --- changed: accept user_info param ---
     async def _run_vb_stream(self, websocket, conv: Conversation, message: str, resume: bool = False, user_info: Optional[Dict[str, Any]] = None):
@@ -222,7 +230,7 @@ class Orchestrator:
                 ui["user_id"] = conv.user_id
             if "user_id" not in ui:
                 ui = dict(ui)
-                ui["user_id"] = "demo-user"
+                ui["user_id"] = "demo-user-222xxx"
 
             async for chunk in vb.run(
                 thread_id=conv.id,
@@ -266,6 +274,10 @@ class Orchestrator:
                     if not et and "stream" in chunk:
                         await self._emit(websocket, conv, "token", {"text": chunk["stream"]})
                         continue
+                    # Ensure card-locked status surfaces only after confirm action (resume=True)
+                    if et == "status" and isinstance(pl, dict) and pl.get("status") == "Card temporarily locked" and not resume:
+                        # Skip early emission to keep ordering below the action card
+                        continue
                     if et in ("status", "card", "token", "done", "error"):
                         await self._emit(websocket, conv, et, pl)
                     else:
@@ -276,6 +288,7 @@ class Orchestrator:
                 await self._emit(websocket, conv, "token", {"text": buffer_text})
 
             conv.state = State.Completed
+            print(f"Conversation {resume} completed.")
             await self._emit(websocket, conv, "done", {"message": "completed" if not resume else "action_processed"})
 
         except asyncio.CancelledError:

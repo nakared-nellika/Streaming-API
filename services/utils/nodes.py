@@ -2,10 +2,15 @@ from services.utils.state import MessageState
 from langgraph.types import Command
 from langchain.messages import SystemMessage, HumanMessage
 from langgraph.config import get_stream_writer
-import json, asyncio, aiofiles
+import json, asyncio, aiofiles, os
 from services.utils.status import append_status, get_status
 from langgraph.types import interrupt
 from services.utils.prompt_manager import all_prompts
+
+# Get the directory where this script is located
+current_dir = os.path.dirname(os.path.abspath(__file__))
+# Navigate to the mock_data directory relative to this script's location
+mock_data_dir = os.path.join(current_dir, "..", "mock_data")
 
 async def map_intent(state: MessageState, model_intent):
     intent = await model_intent.ainvoke({"messages": state["messages"]})
@@ -30,7 +35,8 @@ async def fetch_transactions(state: MessageState):
     writer = get_stream_writer()
     writer("Analyzing your account...")
     writer("Security check in progress...")
-    async with aiofiles.open('mock_data/transactions.json', 'r', encoding='utf-8') as f:
+    transactions_file = os.path.join(mock_data_dir, "transactions.json")
+    async with aiofiles.open(transactions_file, 'r', encoding='utf-8') as f:
         content = await f.read()
     transactions = json.loads(content)
     return {"transactions" : transactions}
@@ -45,12 +51,16 @@ async def analyze_transactions_agent(state: MessageState, model_analyze):
 async def lock_card(state: MessageState):
     writer = get_stream_writer()
     status = await get_status(state["user_info"]['user_id'])
-    if status.get('card_locked', False):
-        writer("ได้เลยครับ มีอะไรให้ช่วยอีกไหมครับ?")
-        return Command(goto="__end__")
+    # print(f"Current status before locking card: { state}")
     decision = interrupt({
         "question": "Are you sure you want to lock your card?"
     })
+    # print(f"User decision on locking card: {decision}")
+    print(status.get('card_locked', False))
+    if status.get('card_locked', False):
+        writer("ได้เลยครับ มีอะไรให้ช่วยอีกไหมครับ?")
+        return Command(goto="__end__")
+    
     if decision == "Yes":
         writer("Card temporarily locked")
         await append_status(state["user_info"]['user_id'], {"card_locked": "LOCKED"})

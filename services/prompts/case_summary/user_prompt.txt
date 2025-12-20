@@ -1,0 +1,2 @@
+Here is the case status: {status}
+Please provide a concise summary of the case progress in Thai language.

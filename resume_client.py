@@ -4,7 +4,7 @@ import time
 import websockets
 
 WS_URI = "ws://127.0.0.1:8000/chat/stream"
-CONVERSATION_ID = "demo-1"
+CONVERSATION_ID = "demo-user-222xxx"
 
 # ใส่ sequence ล่าสุดที่ "client เคยได้รับแล้ว" เพื่อให้ server replay ต่อจาก last_sequence + 1
 # แนะนำ: ลองใส่ 0 เพื่อให้ replay ทั้งหมด (ถ้ามีใน buffer)

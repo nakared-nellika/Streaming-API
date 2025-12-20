@@ -1,0 +1,72 @@
+[
+  {
+    "transaction_id": "TXN2001",
+    "account_id": "ACC9001",
+    "transaction_datetime": "2025-12-01T09:12:30+07:00",
+    "transaction_type": "DEBIT",
+    "amount": -150.00,
+    "currency": "THB",
+    "merchant": "7-Eleven",
+    "channel": "CARD",
+    "authorization_status": "AUTHORIZED",
+    "auth_method": "PIN",
+    "status": "SUCCESS",
+    "fraud_flag": false
+  },
+  {
+    "transaction_id": "TXN2002",
+    "account_id": "ACC9001",
+    "transaction_datetime": "2025-12-01T12:45:10+07:00",
+    "transaction_type": "DEBIT",
+    "amount": -2350.00,
+    "currency": "THB",
+    "merchant": "Central Department Store",
+    "channel": "CARD",
+    "authorization_status": "AUTHORIZED",
+    "auth_method": "OTP",
+    "status": "SUCCESS",
+    "fraud_flag": false
+  },
+  {
+    "transaction_id": "TXN2003",
+    "account_id": "ACC9001",
+    "transaction_datetime": "2025-12-01T18:00:00+07:00",
+    "transaction_type": "CREDIT",
+    "amount": 28500.00,
+    "currency": "THB",
+    "merchant": "ABC Company Ltd.",
+    "channel": "TRANSFER",
+    "authorization_status": "AUTHORIZED",
+    "auth_method": "BIOMETRIC",
+    "status": "SUCCESS",
+    "fraud_flag": false
+  },
+  {
+    "transaction_id": "TXN2004",
+    "account_id": "ACC9001",
+    "transaction_datetime": "2025-12-02T02:14:55+07:00",
+    "transaction_type": "DEBIT",
+    "amount": -9800.00,
+    "currency": "THB",
+    "merchant": "Unknown Online Store",
+    "channel": "ONLINE",
+    "authorization_status": "UNAUTHORIZED",
+    "auth_method": "NONE",
+    "status": "POSTED",
+    "fraud_flag": true
+  },
+  {
+    "transaction_id": "TXN2005",
+    "account_id": "ACC9001",
+    "transaction_datetime": "2025-12-02T03:01:20+07:00",
+    "transaction_type": "DEBIT",
+    "amount": -15500.00,
+    "currency": "THB",
+    "merchant": "Foreign E-commerce Site",
+    "channel": "ONLINE",
+    "authorization_status": "UNAUTHORIZED",
+    "auth_method": "NONE",
+    "status": "POSTED",
+    "fraud_flag": true
+  }
+]
